@@ -1,8 +1,12 @@
+#!/usr/bin/env Rscript
+
+library(methods)
+
 options(ENTREZ_KEY = "a65e721e6610fc345921a5a2778178171707")
 
-needed.packages = c('ggplot2', 'plotly', 'magrittr', 'dplyr', 'rstudioapi', 'taxize', 'phangorn', 'htmlwidgets','BiocManager','stringr')
+needed.packages = c('argparser', 'ggplot2', 'plotly', 'magrittr', 'dplyr', 'rstudioapi', 'taxize', 'phangorn', 'htmlwidgets', 'BiocManager', 'stringr')
 absent.packages = needed.packages[!(needed.packages %in% rownames(installed.packages()))]
-install.packages(absent.packages)
+install.packages(absent.packages, repos = "http://cran.us.r-project.org")
 
 needed.packages.bio = c('ggtree', "ape", "Biostrings")
 absent.packages.bio = needed.packages.bio[!(needed.packages.bio %in% rownames(installed.packages()))]
@@ -12,14 +16,37 @@ for(pack in needed.packages) eval(parse(text = sprintf('library(%s)', pack)))
 for(pack in needed.packages.bio) eval(parse(text = sprintf('library(%s)', pack)))
 
 
-#tryCatch()
-script.dir = dirname(rstudioapi::getActiveDocumentContext()$path)
-setwd(script.dir)
+### defining startup argements
+p <- arg_parser("RTrans transcriptome analysis pipeline")
+p <- add_argument(p, "--input-csv", short = '-i', help="Input RunInfo CSV file from NCBI SRA", default = NA)
+p <- add_argument(p, "--clade-name", short = '-n', help="Name of clade (for naming plots). For example, insecta", default = 'Default')
+p <- add_argument(p, "--out-dir", short = '-o', help="Output directory", default = NA)
+p = parse_args(p, argv = commandArgs(trailingOnly = TRUE))
 
-run.info.file.name = 'insecta.csv'
-descr = 'Insecta'
+
+if(is.na(p$input_csv))  stop('Input csv file should be specified')
+if(!file.exists(p$input_csv))  stop(sprintf('Input csv file %s is absent', p$input_csv))
+
+
+if(is.na(p$out_dir)){
+  p$out_dir = tryCatch(expr = {
+      dirname(rstudioapi::getActiveDocumentContext()$path)
+    }, error = function (err){
+      getwd()
+    }, warning = function (err){
+      dirname(rstudioapi::getActiveDocumentContext()$path)
+    })
+}
+dir.create(p$out_dir, showWarnings = FALSE)
+
+# p$input_csv = 'insecta.csv'
+# p$clade_name = 'Insecta'
+run.info.file.name = p$input_csv
+descr = p$clade_name
 
 run.info.table = read.delim2(run.info.file.name, sep = ',', quote = '\"', check.names = FALSE, as.is = TRUE) %>% as.data.frame
+setwd(p$out_dir)
+
 run.info.table$ReleaseDate = as.Date(run.info.table$ReleaseDate)
 
 
@@ -511,7 +538,7 @@ dev.off()
 ######################################################################################################
 
 keep = run.info.table$Platform %in% c('OXFORD_NANOPORE', 'PACBIO_SMRT')
-keep = rep(TRUE, nrow(run.info.table))
+#keep = rep(TRUE, nrow(run.info.table))
 cat(sprintf('%d of %d datasets are done with Nanopore of PacBio\n', sum(keep), length(keep)))
 
 run.info.table..lr = run.info.table[keep,,drop = FALSE]
